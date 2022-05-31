@@ -59,6 +59,8 @@ async function run(): Promise<void> {
 
   for (const repo of repos) {
     try {
+      await handleCancellations(repo, artifactClient);
+
       const workDir = fs.mkdtempSync(path.join(curDir, repo.id.toString()));
       chdir(workDir);
 
@@ -113,6 +115,32 @@ async function uploadError(
     "errors", // rootdirectory
     { continueOnError: false }
   );
+}
+
+/**
+ * Attempts to upload an error artifact if a job is cancelled.
+ * Note: All jobs will be force-cancelled after 5 mins, so we may not get through all repositories.
+ *
+ * Information about workflow cancellations here:
+ * https://docs.github.com/en/actions/managing-workflow-runs/canceling-a-workflow#steps-github-takes-to-cancel-a-workflow-run
+ */
+async function handleCancellations(repo: Repo, artifactClient: ArtifactClient) {
+  let isCancelled = false;
+  process.on("SIGINT", () => {
+    isCancelled = true;
+    console.log(
+      `SIGINT received, uploading error artifact for repo ${repo.nwo}`
+    );
+  });
+  process.on("SIGTERM", () => {
+    isCancelled = true;
+    console.log(
+      `SIGTERM received, uploading error artifact for repo ${repo.nwo}`
+    );
+  });
+  if (isCancelled) {
+    await uploadError("Job cancelled", repo, artifactClient);
+  }
 }
 
 void run();
