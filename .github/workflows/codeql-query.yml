@@ -93,7 +93,7 @@ jobs:
     if: always()
     needs:
       - run
-    permissions: {}
+    permissions: { actions:read }
 
     steps:
       # NOTE: this is only expected to work on github.com hosted runnners.
@@ -113,3 +113,5 @@ jobs:
 
       - name: Combine results
         uses: github/codeql-variant-analysis-action/combine-results@main
+        with:
+          token: ${{ github.token }}

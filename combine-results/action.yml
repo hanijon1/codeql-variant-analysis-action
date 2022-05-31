@@ -1,6 +1,10 @@
 name: "CodeQL: Combine query results"
 description: "Combine the results of a batch query run into a single index file"
 author: "GitHub"
+inputs:
+  token:
+    description: "Token to use to post the results to an issue"
+    required: true
 runs:
   using: "node12"
   main: "../lib/combine-results.js"

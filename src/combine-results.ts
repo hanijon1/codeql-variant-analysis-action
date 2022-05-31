@@ -6,13 +6,16 @@ import {
   create as createArtifactClient,
   DownloadResponse,
 } from "@actions/artifact";
-import { setFailed } from "@actions/core";
+import { getInput, setFailed } from "@actions/core";
+import { getOctokit } from "@actions/github";
 import { mkdirP } from "@actions/io";
 
 import { createResultIndex } from "./interpret";
 
 async function run(): Promise<void> {
   try {
+    const token = getInput("token", { required: true });
+
     const artifactClient = createArtifactClient();
     const [resultArtifacts, errorArtifacts] = await downloadArtifacts(
       artifactClient
@@ -22,6 +25,19 @@ async function run(): Promise<void> {
     if (resultArtifacts.length === 0) {
       setFailed("Unable to run query on any repositories.");
       return;
+    }
+
+    // Check for any cancelled jobs using https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run
+    const octokit = getOctokit(token);
+    const cancelledJobsResponse = await octokit.request(
+      `GET /repos/${process.env["GITHUB_REPOSITORY"]}/actions/runs/${process.env["GITHUB_RUN_ID"]}/jobs`
+    );
+    const cancelledJobs = cancelledJobsResponse.data.jobs.filter(
+      (job) => job.conclusion === "cancelled"
+    );
+    if (cancelledJobs.length > 0) {
+      const jobIds = cancelledJobs.map((job) => job.id);
+      console.log(jobIds.join(", "));
     }
 
     await mkdirP("results");
