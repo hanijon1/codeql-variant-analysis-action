@@ -21,6 +21,15 @@ export {
 // This name must match that used by the vscode extension when creating the pack.
 const REMOTE_QUERY_PACK_NAME = "codeql-remote/query";
 
+// To transition to live results
+interface ReturnType {
+  bqrsFilePath: string;
+  sarifFilePath?: string;
+  metadataFilePath: string;
+  resultCount: number;
+  databaseSHA: string | undefined;
+  sourceLocationPrefix: string;
+}
 /**
  * Run a query. Will operate on the current working directory and create the following directories:
  * - query/    (query.ql and any other supporting files)
@@ -38,11 +47,10 @@ async function runQuery(
   database: string,
   nwo: string,
   queryPack: string
-): Promise<string[]> {
+): Promise<ReturnType> {
+  // If we have a variant_analysis_id, only return one file (SARIF or BQRS)
   const bqrsFilePath = path.join("results", "results.bqrs");
   fs.mkdirSync("results");
-
-  const outputFilePaths = [bqrsFilePath];
 
   const databaseName = "db";
   await exec(codeql, [
@@ -68,6 +76,8 @@ async function runQuery(
     REMOTE_QUERY_PACK_NAME,
   ]);
 
+  // TODO: figure out what this is and why it's needed
+  // Separate out into a separate function
   let cur = `${databaseName}/results`;
   let entries: fs.Dirent[];
   while (
@@ -95,6 +105,7 @@ async function runQuery(
   const sourceLocationPrefix = await getSourceLocationPrefix(codeql);
   const isSarif = queryCanHaveSarifOutput(compatibleQueryKinds);
   let resultCount: number;
+  let sarifFilePath: string | undefined;
   if (isSarif) {
     const sarif = await generateSarif(
       codeql,
@@ -106,9 +117,8 @@ async function runQuery(
       dbMetadata.creationMetadata?.sha
     );
     resultCount = getSarifResultCount(sarif);
-    const sarifFilePath = path.join("results", "results.sarif");
+    sarifFilePath = path.join("results", "results.sarif");
     fs.writeFileSync(sarifFilePath, JSON.stringify(sarif));
-    outputFilePaths.push(sarifFilePath);
   } else {
     resultCount = getBqrsResultCount(bqrsInfo);
   }
@@ -121,9 +131,15 @@ async function runQuery(
     dbMetadata.creationMetadata?.sha,
     sourceLocationPrefix
   );
-  outputFilePaths.push(metadataFilePath);
 
-  return outputFilePaths;
+  return {
+    bqrsFilePath,
+    sarifFilePath,
+    metadataFilePath,
+    resultCount,
+    databaseSHA: dbMetadata.creationMetadata?.sha,
+    sourceLocationPrefix,
+  };
 }
 
 async function downloadDatabase(

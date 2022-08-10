@@ -12,6 +12,13 @@ import { extractTar } from "@actions/tool-cache";
 import { downloadDatabase, runQuery } from "./codeql";
 import { download } from "./download";
 import { writeQueryRunMetadataToFile } from "./query-run-metadata";
+import {
+  getSignedUrlForRepoArtifact,
+  setVariantAnalysisFailed,
+  setVariantAnalysisRepoInProgress,
+  setVariantAnalysisRepoSucceeded,
+} from "./api-client";
+import { uploadArtifactToAzure } from "./azure-storage-client";
 
 interface Repo {
   id: number;
@@ -30,6 +37,10 @@ async function run(): Promise<void> {
     getInput("repositories", { required: true })
   );
   const codeql = getInput("codeql", { required: true });
+  const variantAnalysisId = parseInt(getInput("variant_analysis_id"));
+  if (variantAnalysisId) {
+    // do something new
+  }
 
   for (const repo of repos) {
     if (repo.downloadUrl) {
@@ -53,6 +64,13 @@ async function run(): Promise<void> {
     setFailed(error.message);
     for (const repo of repos) {
       await uploadError(error, repo, artifactClient);
+      if (variantAnalysisId) {
+        await setVariantAnalysisFailed(
+          variantAnalysisId,
+          repo.id,
+          error.message
+        );
+      }
     }
     return;
   }
@@ -75,11 +93,45 @@ async function run(): Promise<void> {
         dbZip = await downloadDatabase(repo.id, repo.nwo, language, repo.pat);
       }
 
+      if (variantAnalysisId) {
+        // 1.5 Mark variant analysis for repo task as in progress
+        await setVariantAnalysisRepoInProgress(variantAnalysisId, repo.id);
+      }
+
       // 2. Run the query
       console.log("Running query");
-      const filesToUpload = await runQuery(codeql, dbZip, repo.nwo, queryPack);
+      const queryRunResult = await runQuery(codeql, dbZip, repo.nwo, queryPack);
+
+      if (variantAnalysisId) {
+        // 2.5 Get signed URL for artifact upload
+        const signedUrl = await getSignedUrlForRepoArtifact(
+          variantAnalysisId,
+          repo.id
+        );
+
+        // Create Azure client for uploading to Azure Blob Storage
+        const fileToUpload =
+          queryRunResult.sarifFilePath || queryRunResult.bqrsFilePath;
+        await uploadArtifactToAzure(signedUrl, fileToUpload);
+
+        // 3. Mark variant analysis for repo task as succeeded
+        await setVariantAnalysisRepoSucceeded(
+          variantAnalysisId,
+          repo.id,
+          queryRunResult.sourceLocationPrefix,
+          queryRunResult.resultCount,
+          queryRunResult.databaseSHA || "HEAD"
+        );
+      }
 
       // 3. Upload the results as an artifact
+      const filesToUpload = [
+        queryRunResult.bqrsFilePath,
+        queryRunResult.metadataFilePath,
+      ];
+      if (queryRunResult.sarifFilePath) {
+        filesToUpload.push(queryRunResult.sarifFilePath);
+      }
       console.log("Uploading artifact");
       await artifactClient.uploadArtifact(
         repo.id.toString(), // name
@@ -90,6 +142,13 @@ async function run(): Promise<void> {
     } catch (error: any) {
       setFailed(error.message);
       await uploadError(error, repo, artifactClient);
+      if (variantAnalysisId) {
+        await setVariantAnalysisFailed(
+          variantAnalysisId,
+          repo.id,
+          error.message
+        );
+      }
     }
 
     // We can now delete the work dir. All required files have already been uploaded.
