@@ -1,0 +1,13 @@
+# These are supported funding model platforms
+
+github : # جایگزینی با حداکثر 4 نام کاربری دارای حامیان مالی GitHub به عنوان مثال، [user1, user2]
+patreon : # با یک نام کاربری Patreon جایگزین کنید
+open_collective : # با یک نام کاربری Open Collective جایگزین کنید
+ko_fi: # Replace with a single Ko-fi username
+tidelift: # Replace with a single Tidelift platform-name/package-name e.g., npm/babel
+community_bridge: # Replace with a single Community Bridge project-name e.g., cloud-foundry
+liberapay: # Replace with a single Liberapay username
+issuehunt: # Replace with a single IssueHunt username
+otechie  : # با 4 یک نام کاربری Otechie جایگزین ک
+lfx_crowdfunding  : # با یک پروژه LFX Crowdfunding را انتخاب کنید، به عنوان مثال، Cloud-Foundry
+سفارشی  : # جایگزینی با بیشترین 4 نشانی حمایت اینترنتی سفارشی به عنوان مثال، ['link1', 'link2']
